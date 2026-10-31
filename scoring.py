@@ -1,8 +1,7 @@
 """
 Turning two numbers into one, and one number into something a person can read.
-← YOU BUILD THIS IN MILESTONES 4 AND 5
 
-Two functions live here, and both are stubs.
+Two functions live here.
 
 `combine_signals` is where your false-positive decision from Milestone 1
 actually gets made. Everything above it — the labels, the appeal path — is
@@ -21,7 +20,7 @@ import config
 
 def combine_signals(model_score: float, style_score: float) -> float:
     """
-    Combine two 0–1 signals into one 0–1 score. ← TODO (Milestone 4)
+    Combine two 0–1 signals into one 0–1 score.
 
     Both inputs point the same way: higher means more likely AI. Your output
     should too.
@@ -51,18 +50,24 @@ def combine_signals(model_score: float, style_score: float) -> float:
 
     The weights in config.py are placeholders. Change them, or ignore them and
     write a different rule.
+
+    My rule: a weighted average, 0.6 model and 0.4 style (config.py). If the
+    two signals are more than DISAGREEMENT_LIMIT apart, the result is held
+    inside the unsure band, so a split can never produce a confident label in
+    either direction.
     """
-    # TODO: replace this
-    return (
+    combined = (
         config.WEIGHT_MODEL_SIGNAL * model_score
         + config.WEIGHT_STYLE_SIGNAL * style_score
     )
+    if abs(model_score - style_score) > config.DISAGREEMENT_LIMIT:
+        combined = min(max(combined, config.HUMAN_THRESHOLD), config.AI_THRESHOLD - 0.01)
+    return round(min(max(combined, 0.0), 1.0), 4)
 
 
 def score_to_label(score: float) -> tuple[str, str]:
     """
     Turn a score into a guess and the text a reader actually sees.
-    ← TODO (Milestone 5)
 
     Returns:
         (guess, label_text) — where `guess` is a short machine-readable string
@@ -85,12 +90,24 @@ def score_to_label(score: float) -> tuple[str, str]:
     think if they got it on their own work. That question is the whole
     milestone.
     """
-    # TODO: replace this — thresholds are in config.py
     if score >= config.AI_THRESHOLD:
-        return "ai", "PLACEHOLDER — write the high-confidence AI label."
-    if score <= config.HUMAN_THRESHOLD:
-        return "human", "PLACEHOLDER — write the high-confidence human label."
-    return "unsure", "PLACEHOLDER — write the unsure label."
+        return "ai", (
+            "This looks a lot like writing produced by an AI tool — two "
+            "separate checks both pointed that way. These checks can be "
+            "wrong. If you wrote this yourself, you can appeal and a person "
+            "will look at it."
+        )
+    if score < config.HUMAN_THRESHOLD:
+        return "human", (
+            "This reads like it was written by a person. We didn't find "
+            "anything that suggests an AI tool wrote it."
+        )
+    return "unsure", (
+        "We can't tell either way, so we're not making a call on this one. "
+        "Our checks gave mixed results, which happens a lot with ordinary, "
+        "plainly written work. This is not a finding that AI was used. If "
+        "you'd like a person to look at it, you can ask for a review."
+    )
 
 
 def label_ranges() -> list[tuple[str, str]]:

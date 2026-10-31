@@ -54,8 +54,15 @@ DETECTOR_MAX_TOKENS = 400
 # down BEFORE you code it, and to put the numbers in your README. Whatever you
 # decide, it goes here.
 
-WEIGHT_MODEL_SIGNAL = 0.5
-WEIGHT_STYLE_SIGNAL = 0.5
+# My numbers: 0.6 / 0.4. The model signal separated my calibration inputs
+# more cleanly, and the style signal is the one that's cheapest to game.
+WEIGHT_MODEL_SIGNAL = 0.6
+WEIGHT_STYLE_SIGNAL = 0.4
+
+# When the two signals are further apart than this, neither confident label
+# is allowed — the combined score is held inside the unsure band. Two methods
+# disagreeing that strongly IS uncertainty.
+DISAGREEMENT_LIMIT = 0.5
 
 
 # ─── Thresholds (Milestone 5) ────────────────────────────────────────────────
@@ -71,8 +78,13 @@ WEIGHT_STYLE_SIGNAL = 0.5
 # getting through. There is no setting that avoids the trade — only settings
 # that decide who pays for it.
 
-HUMAN_THRESHOLD = 0.35
-AI_THRESHOLD = 0.65
+# My numbers: 0.40 / 0.85. The AI threshold is deliberately high. On my
+# calibration inputs a plainly-written human paragraph combined to 0.83 and
+# clearly-AI text to 0.89; anything lower than 0.85 accuses the plain writer.
+# The unsure band is wide on purpose — a wrong "AI" label costs a real writer
+# far more than a missed one costs the site.
+HUMAN_THRESHOLD = 0.40
+AI_THRESHOLD = 0.85
 
 # ⚠️ One thing that catches people out in Milestone 5. A weighted average can
 # only land between its two inputs — so while `style_signal` is still the stub
