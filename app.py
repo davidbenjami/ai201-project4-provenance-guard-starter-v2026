@@ -18,8 +18,8 @@ doesn't, it's the service itself.
 Routes:
 
     POST /ping        the worked example. Already works. Don't edit it
-    POST /submit      ← YOU BUILD THIS (Milestone 3, 4, 5)
-    POST /appeal      ← YOU BUILD THIS (Milestone 5)
+    POST /submit      judge a piece of text, log it, return the label
+    POST /appeal      a writer contests a label; moves it to under_review
     GET  /log         the audit log. Already works
     GET  /health      is the service up, and is the model loaded
 """
@@ -32,6 +32,10 @@ import audit
 import config
 
 app = Flask(__name__)
+
+# Longer than this is refused. 20,000 characters is about 3,500 words — well
+# past what signal one reads (400 tokens) and far short of a memory problem.
+MAX_TEXT_CHARS = 20_000
 
 
 # ── Rate limiting — UNIT 8 ────────────────────────────────────────────────────
@@ -148,14 +152,14 @@ def health():
     })
 
 
-# ── YOU BUILD THIS ────────────────────────────────────────────────────────────
+# ── The routes ────────────────────────────────────────────────────────────────
 
 @app.post("/submit")
 # @limiter.limit(f"{config.RATE_LIMIT_PER_MINUTE}/minute;{config.RATE_LIMIT_PER_DAY}/day")
 def submit():
     """
     Take a piece of text, decide about it, log the decision, answer.
-    ← TODO — Milestones 3, 4 and 5
+   
 
     Expects JSON:
         {"text": "...", "creator_id": "..."}
@@ -199,23 +203,70 @@ def submit():
     what should this do when `text` is missing, empty, or enormous? A crash on
     a malformed input is one of the most common real failures there is.
     """
-    payload = request.get_json(silent=True) or {}
+    import detector
+    import scoring
+    import stylometry
 
-    # TODO: delete this and build the route.
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        payload = {}
+
+    creator_id = payload.get("creator_id")
+    if not isinstance(creator_id, str) or not creator_id.strip():
+        creator_id = "anonymous"
+
+    # Bad input is refused with a 4xx and still logged — never a crash.
+    text = payload.get("text")
+    if not isinstance(text, str):
+        return _reject(creator_id, "missing_text", 400,
+                       "Send the writing to check as a string in `text`.")
+    if not text.strip():
+        return _reject(creator_id, "empty_text", 400,
+                       "`text` is empty — there's nothing to check.")
+    if len(text) > MAX_TEXT_CHARS:
+        return _reject(creator_id, "text_too_long", 413,
+                       f"`text` is over {MAX_TEXT_CHARS} characters. Send a shorter piece.",
+                       text_length=len(text))
+
+    try:
+        model_score = detector.model_signal(text)
+    except ValueError:
+        return _reject(creator_id, "text_too_short", 400,
+                       "That's too short to judge. Send a few sentences at least.",
+                       text_length=len(text))
+    except detector.DetectorUnavailable as exc:
+        return jsonify({"error": "detector_unavailable", "message": str(exc)}), 503
+
+    style_score = stylometry.style_signal(text)
+    combined = scoring.combine_signals(model_score, style_score)
+    guess, label = scoring.score_to_label(combined)
+
+    content_id = uuid.uuid4().hex[:12]
+    audit.log_decision(
+        content_id=content_id,
+        creator_id=creator_id,
+        guess=guess,
+        model_score=model_score,
+        style_score=style_score,
+        combined_score=combined,
+        label=label,
+    )
+
     return jsonify({
-        "error": "not_implemented",
-        "message": "POST /submit isn't built yet — see the TODO in app.py.",
-        "you_sent": {
-            "text_length": len(payload.get("text", "")),
-            "creator_id": payload.get("creator_id"),
-        },
-    }), 501
+        "content_id": content_id,
+        "guess": guess,
+        "confidence": combined,
+        "label": label,
+        "model_score": model_score,
+        "style_score": style_score,
+        "status": "decided",
+    })
 
 
 @app.post("/appeal")
 def appeal():
     """
-    A writer says you got it wrong. ← TODO — Milestone 5
+    A writer says you got it wrong.
 
     Expects JSON:
         {"content_id": "...", "reasoning": "..."}
@@ -232,14 +283,44 @@ def appeal():
     to the person on the other end. It's the only thing standing between a
     wrong accusation and nothing at all.
     """
-    payload = request.get_json(silent=True) or {}
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        payload = {}
 
-    # TODO: delete this and build the route.
+    content_id = payload.get("content_id")
+    reasoning = payload.get("reasoning")
+    if not isinstance(content_id, str) or not content_id.strip():
+        return jsonify({"error": "missing_content_id",
+                        "message": "Send the `content_id` you got back from /submit."}), 400
+    if not isinstance(reasoning, str) or not reasoning.strip():
+        return jsonify({"error": "missing_reasoning",
+                        "message": "Tell us in `reasoning` why you think the label is wrong."}), 400
+
+    decisions = [e for e in audit.entries_for(content_id.strip()) if "event" not in e]
+    if not decisions:
+        return jsonify({"error": "unknown_content_id",
+                        "message": f"No submission with content_id '{content_id}'. Check for a typo."}), 404
+
+    original = decisions[-1]
+    entry = audit.log_appeal(
+        content_id=original["content_id"],
+        creator_id=original["creator_id"],
+        reasoning=reasoning.strip(),
+    )
+
     return jsonify({
-        "error": "not_implemented",
-        "message": "POST /appeal isn't built yet — see the TODO in app.py.",
-        "you_sent": payload,
-    }), 501
+        "content_id": original["content_id"],
+        "status": entry["status"],
+        "original_label": original["label"],
+        "message": "Thanks — your appeal is recorded and a person will review "
+                   "this piece. The original label is on hold until then.",
+    })
+
+
+def _reject(creator_id, reason, status_code, message, **extra):
+    """Refuse a request, leaving a trace in the log."""
+    audit.log_rejection(creator_id=creator_id, reason=reason, **extra)
+    return jsonify({"error": reason, "message": message}), status_code
 
 
 # ── Already works ─────────────────────────────────────────────────────────────
