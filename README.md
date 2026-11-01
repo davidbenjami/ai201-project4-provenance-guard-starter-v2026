@@ -76,9 +76,10 @@ finds easy to predict. People make odder, more specific choices.
 **What it can't see:** Who wrote it. Predictability is not authorship. Plain
 writing in common words and short sentences (a second-language writer, a
 younger writer, anyone writing simply on purpose) is as predictable as
-machine text. My plain-human calibration paragraph scored **0.77**, close to
-the clearly-AI paragraph's **0.91**. The reverse also happens: AI text asked
-to be ornate or full of rare words reads as human.
+machine text. A paragraph I wrote myself in short, plain sentences ("I make
+my bed. I work at home. I use the computer…") scored **0.83**, close to a
+clearly-AI paragraph's **0.91**. The reverse also happens: AI text asked to be
+ornate or full of rare words reads as human.
 
 ### Signal two — the style signal
 
@@ -103,10 +104,15 @@ aside in brackets, a dash.
 shape without changing the substance moves it: splitting AI sentences into
 short and long ones, scattering in a few dashes or a question, adding typos
 (which raise vocabulary variety). That's cheap to do on purpose. It also
-shares signal one's victim: plain writing with even sentences and no
-semicolons scored **0.93**, *more* AI-like than the AI paragraph (0.86).
+shares signal one's victim: my own plain paragraph, with even sentences and
+no semicolons, scored **0.98**, *more* AI-like than the AI paragraph (0.86).
 And TTR barely separated anything in calibration, which is why it has the
 smallest weight.
+
+*A note on calibration:* the four calibration inputs I tuned on (clearly AI,
+clearly human, plain human, lightly edited AI) were written by Claude to
+imitate each style. My own writing, tested afterwards, is the real check, and
+it came out worse than the imitations did (see Label Variants).
 
 ### The combining rule
 
@@ -159,13 +165,21 @@ On the AI side, the high threshold does the protecting.
 | unsure | 0.40 – under 0.85 | "We can't tell either way, so we're not making a call on this one. Our checks gave mixed results, which happens a lot with ordinary, plainly written work. This is not a finding that AI was used. If you'd like a person to look at it, you can ask for a review." |
 | high-confidence AI | 0.85 – 1.00 | "This looks a lot like writing produced by an AI tool — two separate checks both pointed that way. These checks can be wrong. If you wrote this yourself, you can appeal and a person will look at it." |
 
-All three are reachable. In the Sample Run below, the three submissions
-produce one of each.
+All three are reachable; the Sample Run below shows each one coming back from
+the live service.
 
-The AI threshold is high on purpose. My plain-human paragraph combined to
-**0.83** and the clearly-AI one to **0.89**. Any AI threshold below 0.83
-accuses the plain writer, so it sits at 0.85. That margin is thin, and I
-expect unit 8 to find text on the wrong side of it.
+The AI threshold is high on purpose. I set it at 0.85 because a
+Claude-written imitation of plain writing combined to 0.83 and a clearly-AI
+paragraph to 0.89. **Then my own plain writing combined to 0.89 and was
+labelled high-confidence AI.** That is a real false positive on a real person's
+work, and exactly the blind spot both signals share. I haven't moved the
+threshold to hide it: 0.89 is the same score the AI paragraph got, so no
+threshold separates them. That's a unit 8 diagnosis, not a number to tune.
+
+It also shows how hard "human" is to reach. My casual wallet paragraph got
+0.78 (unsure), and a Mark Twain passage got 0.44 (unsure). The only input that
+reached the human label was a Claude-written imitation of lively, punctuated
+human prose.
 
 **Why I worded the "unsure" one this way:**
 
@@ -183,50 +197,54 @@ reads as an accusation with a hedge on it.
 
 ## Sample Run
 
-**A submission**
+**A submission:** a paragraph I wrote myself, plainly on purpose
 
 ```bash
 $ curl -X POST http://127.0.0.1:5000/submit \
   -H "Content-Type: application/json" \
-  -d '{"text": "Artificial intelligence is transforming the way we live and work. It offers numerous benefits, including increased efficiency, improved decision-making, and enhanced productivity. However, it is important to consider the potential challenges and risks associated with its use. By addressing these concerns, we can ensure that artificial intelligence is used responsibly and ethically. Ultimately, the future of artificial intelligence depends on our ability to balance innovation with responsibility.", "creator_id": "calib_ai"}'
+  -d "{\"text\": \"I make my bed. I work at home. I use the computer. I type on the keyboard. I don't see anyone. I eat after. I like the weather. I want to find a good job.\", \"creator_id\": \"dave\"}"
 ```
 
 ```json
-{"confidence":0.8899,"content_id":"60af9d04d8c0","guess":"ai","label":"This looks a lot like writing produced by an AI tool — two separate checks both pointed that way. These checks can be wrong. If you wrote this yourself, you can appeal and a person will look at it.","model_score":0.9124,"status":"decided","style_score":0.8561}
+{"confidence":0.8915,"content_id":"f71a14bba408","guess":"ai","label":"This looks a lot like writing produced by an AI tool — two separate checks both pointed that way. These checks can be wrong. If you wrote this yourself, you can appeal and a person will look at it.","model_score":0.8335,"status":"decided","style_score":0.9785}
 ```
 
-The other two labels, from the same session:
+Every word is mine, and it was labelled high-confidence AI. Both signals
+agreed (model 0.83, style 0.98) because both reward the same thing: short
+sentences in common words with no unusual punctuation.
+
+The other labels, from the same service:
+
+My own writing, in my normal voice (typos left in):
 
 ```bash
 $ curl -X POST http://127.0.0.1:5000/submit \
   -H "Content-Type: application/json" \
-  -d '{"text": "I work at a store on weekends. I stock the shelves and help people find things. Some days are busy and some days are slow. My manager is nice and she lets me pick my breaks. I like the job because I can save money for school. Next year I want to study nursing. My mom is a nurse and she says it is hard work but good work.", "creator_id": "calib_plain"}'
+  -d '{"text": "Yo, I almost lost my wallet. When I could noe find it my heart sank to the bottom of my stomach. I searched everywhere and I was at home so nobody could help me look for it. I later found it in the garage. I left it there when I took the trash out.", "creator_id": "dave"}'
 ```
 
 ```json
-{"confidence":0.8309,"content_id":"1748c00e7207","guess":"unsure","label":"We can't tell either way, so we're not making a call on this one. Our checks gave mixed results, which happens a lot with ordinary, plainly written work. This is not a finding that AI was used. If you'd like a person to look at it, you can ask for a review.","model_score":0.768,"status":"decided","style_score":0.9252}
+{"confidence":0.781,"content_id":"367d74606204","guess":"unsure","label":"We can't tell either way, so we're not making a call on this one. Our checks gave mixed results, which happens a lot with ordinary, plainly written work. This is not a finding that AI was used. If you'd like a person to look at it, you can ask for a review.","model_score":0.7492,"status":"decided","style_score":0.8287}
 ```
 
-```bash
-$ curl -X POST http://127.0.0.1:5000/submit \
-  -H "Content-Type: application/json" \
-  -d "{\"text\": \"My grandmother kept chickens until she was ninety-one. Not many — four, maybe five at a time, each one named after a country singer she'd liked and then fallen out with. Dolly outlived three Lorettas. When the fox finally got in (it was always going to; the wire was older than my mother), she didn't cry, she just sat on the back step with her coffee going cold and said, well, that's that, then. She bought two more on Saturday.\", \"creator_id\": \"dave\"}"
-```
+The human label, reached by a Claude-written imitation of casual human prose
+(from my first session; it shows the label is reachable, not that it is
+reached by real human writing):
 
 ```json
 {"confidence":0.2308,"content_id":"e392ee7b7fa7","guess":"human","label":"This reads like it was written by a person. We didn't find anything that suggests an AI tool wrote it.","model_score":0.3641,"status":"decided","style_score":0.0309}
 ```
 
-**An appeal**
+**An appeal** against the false positive above
 
 ```bash
 $ curl -X POST http://127.0.0.1:5000/appeal \
   -H "Content-Type: application/json" \
-  -d '{"content_id": "60af9d04d8c0", "reasoning": "I wrote this myself for a class assignment. It sounds formal because the prompt asked for a formal summary."}'
+  -d '{"content_id": "f71a14bba408", "reasoning": "I wrote this myself. I wrote it in short simple sentences on purpose."}'
 ```
 
 ```json
-{"content_id":"60af9d04d8c0","message":"Thanks — your appeal is recorded and a person will review this piece. The original label is on hold until then.","original_label":"This looks a lot like writing produced by an AI tool — two separate checks both pointed that way. These checks can be wrong. If you wrote this yourself, you can appeal and a person will look at it.","status":"under_review"}
+{"content_id":"f71a14bba408","message":"Thanks — your appeal is recorded and a person will review this piece. The original label is on hold until then.","original_label":"This looks a lot like writing produced by an AI tool — two separate checks both pointed that way. These checks can be wrong. If you wrote this yourself, you can appeal and a person will look at it.","status":"under_review"}
 ```
 
 **What the log shows afterwards**
@@ -236,12 +254,13 @@ $ curl "http://127.0.0.1:5000/log?limit=3"
 ```
 
 ```json
-{"count":3,"entries":[{"combined_score":0.8309,"content_id":"1748c00e7207","creator_id":"calib_plain","guess":"unsure","label":"We can't tell either way, so we're not making a call on this one. Our checks gave mixed results, which happens a lot with ordinary, plainly written work. This is not a finding that AI was used. If you'd like a person to look at it, you can ask for a review.","model_score":0.768,"status":"decided","style_score":0.9252,"timestamp":"2026-10-31T21:58:04+00:00"},{"combined_score":0.2308,"content_id":"e392ee7b7fa7","creator_id":"dave","guess":"human","label":"This reads like it was written by a person. We didn't find anything that suggests an AI tool wrote it.","model_score":0.3641,"status":"decided","style_score":0.0309,"timestamp":"2026-10-31T21:58:04+00:00"},{"content_id":"60af9d04d8c0","creator_id":"calib_ai","event":"appeal","reasoning":"I wrote this myself for a class assignment. It sounds formal because the prompt asked for a formal summary.","status":"under_review","timestamp":"2026-10-31T21:58:09+00:00"}]}
+{"count":3,"entries":[{"combined_score":0.8915,"content_id":"f71a14bba408","creator_id":"dave","guess":"ai","label":"This looks a lot like writing produced by an AI tool — two separate checks both pointed that way. These checks can be wrong. If you wrote this yourself, you can appeal and a person will look at it.","model_score":0.8335,"status":"decided","style_score":0.9785,"timestamp":"2026-11-01T20:29:49+00:00"},{"combined_score":0.4438,"content_id":"77754bf374da","creator_id":"twain_sample","guess":"unsure","label":"We can't tell either way, so we're not making a call on this one. Our checks gave mixed results, which happens a lot with ordinary, plainly written work. This is not a finding that AI was used. If you'd like a person to look at it, you can ask for a review.","model_score":0.4611,"status":"decided","style_score":0.4179,"timestamp":"2026-11-01T20:30:00+00:00"},{"content_id":"f71a14bba408","creator_id":"dave","event":"appeal","reasoning":"I wrote this myself. I wrote it in short simple sentences on purpose.","status":"under_review","timestamp":"2026-11-01T20:30:13+00:00"}]}
 ```
 
 The appeal sits after the original decision; it doesn't overwrite it. The
-`ai` decision for `60af9d04d8c0` is still earlier in `logs/audit.jsonl`, now
-followed by an `under_review` entry with the writer's reasoning.
+`ai` decision for `f71a14bba408` is still in the log, followed by an
+`under_review` entry with my reasoning. (The middle entry is the Mark Twain
+passage, submitted between the two.)
 
 ---
 
@@ -249,27 +268,25 @@ followed by an `under_review` entry with the writer's reasoning.
 
 **Moment 1**
 
-- *What I asked for:* An implementation of the three style measures and a
-  `style_signal` that combines them, with a first guess at the calibration
-  ranges.
-- *What came back:* Working measures, but with type-token ratio mapped
-  0.65 → 0.85. Run on the four calibration inputs, the clearly-AI paragraph
-  had a *higher* TTR (0.86) than the plain human one (0.78), so that measure
-  was pushing the wrong way.
-- *What I changed:* Moved the TTR range to 0.75 → 0.90 and cut its weight to
-  0.2, the smallest of the three, and wrote down in the Signals section that
-  it barely separates anything.
+- *What I asked for:* I asked Claude to help me complete and review my
+  assignment.
+- *What came back:* The code for both signals, the scoring, the routes and a
+  draft of this write-up. I read the response and looked at the bolded points.
+- *What I changed / would change:* I expected the AI's writing wouldn't sound
+  human, and it doesn't. Next time I would make the points short and simple
+  first, then add a more detailed paragraph.
 
 **Moment 2**
 
-- *What I asked for:* A combining rule and thresholds.
-- *What came back:* A 0.6/0.4 weighted average. Calibration showed the
-  starter's 0.65 AI threshold would label my plain-human paragraph (0.83)
-  high-confidence AI.
-- *What I changed:* Raised the AI threshold to 0.85, added the disagreement
-  guard so a split between the signals can only ever produce "unsure", and
-  rewrote the unsure label to say outright that it is not a finding of AI
-  use.
+- *What I asked for:* Help finishing the parts that had to be mine.
+- *What came back:* Claude pointed out that the "human" sample paragraphs in
+  my first draft were written by Claude, not me, so they couldn't test
+  anything. It gave me questions to answer instead of writing the paragraphs
+  for me.
+- *What I changed:* I wrote my own two paragraphs and ran them. My plain one
+  was labelled high-confidence AI. The first draft had said the 0.85
+  threshold protected plain writers; my own writing showed it doesn't, so this
+  write-up now says that.
 
 <!-- ═══════════════════════ UNIT 8 — THE TEST ═══════════════════════ -->
 
