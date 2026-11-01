@@ -268,8 +268,7 @@ passage, submitted between the two.)
 
 **Moment 1**
 
-- *What I asked for:* I asked Claude to help me complete and review my
-  assignment.
+- *What I asked for:* I asked Claude to explain parts of my assignment.
 - *What came back:* The code for both signals, the scoring, the routes and a
   draft of this write-up. I read the response and looked at the bolded points.
 - *What I changed / would change:* I expected the AI's writing wouldn't sound
@@ -278,7 +277,7 @@ passage, submitted between the two.)
 
 **Moment 2**
 
-- *What I asked for:* Help finishing the parts that had to be mine.
+- *What I asked for:* Help understand the parts that had to be mine.
 - *What came back:* Claude pointed out that the "human" sample paragraphs in
   my first draft were written by Claude, not me, so they couldn't test
   anything. It gave me questions to answer instead of writing the paragraphs
